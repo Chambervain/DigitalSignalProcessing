@@ -1,66 +1,54 @@
-# filter_16.py
-# 
-# Implement the second-order recursive difference equation
-# y(n) = x(n) - a1 y(n-1) - a2 y(n-2)
-# 
+# filter_16_stereo.py
+# Implement a stereo signal with a different frequency in each channel
+# Left channel will be a cosine wave with f1, right channel will be a cosine wave with f2
 # 16 bit/sample
 
-from math import cos, pi 
+from math import cos, pi
 import pyaudio
 import struct
 
-
 # Fs : Sampling frequency (samples/second)
 Fs = 8000
-# Also try other values of 'Fs'. What happens? Why?
 
 T = 1       # T : Duration of audio to play (seconds)
-N = T*Fs    # N : Number of samples to play
+N = T * Fs  # N : Number of samples to play
 
-# Difference equation coefficients
-a1 = -1.9
-a2 = 0.998
+# Frequencies for the left and right channels
+f1 = 400   # Left channel frequency (Hz)
+f2 = 600   # Right channel frequency (Hz)
 
-# Initialization
-y1 = 0.0
-y2 = 0.0
-gain = 10000.0
-# Also try other values of 'gain'. What is the effect?
-# gain = 20000.0
+# Gain to ensure impulse response does not exceed the 16-bit maximum value
+gain = 32767
 
 # Create an audio object and open an audio stream for output
 p = pyaudio.PyAudio()
-stream = p.open(format = pyaudio.paInt16,  
-                channels = 1, 
-                rate = Fs,
-                input = False, 
-                output = True)
+stream = p.open(format=pyaudio.paInt16,
+                channels=2,    # Two channels for stereo
+                rate=Fs,
+                input=False,
+                output=True)
 
 # paInt16 is 16 bits/sample
-
-# Run difference equation
+# Run for N samples
 for n in range(0, N):
 
-    # Use impulse as input signal
-    if n == 0:
-        x0 = 1.0
-    else:
-        x0 = 0.0
+    # Generate signal for left channel (cosine wave at f1 Hz)
+    left_channel_value = gain * cos(2 * pi * f1 * n / Fs)
 
-    # Difference equation
-    y0 = x0 - a1 * y1 - a2 * y2
+    # Generate signal for right channel (cosine wave at f2 Hz)
+    right_channel_value = gain * cos(2 * pi * f2 * n / Fs)
 
-    # Delays
-    y2 = y1
-    y1 = y0
+    # Clipping to avoid overflow
+    left_channel_value = max(min(left_channel_value, 32767), -32768)
+    right_channel_value = max(min(right_channel_value, 32767), -32768)
 
-    # Output
-    output_value = gain * y0
-    output_string = struct.pack('h', int(output_value))   # 'h' for 16 bits
-    stream.write(output_string)
+    # Pack both channels into binary format (left and right)
+    data = struct.pack('hh', int(left_channel_value), int(right_channel_value))
 
-print("* Finished *")
+    # Write binary data to audio stream
+    stream.write(data)
 
+# Close the audio stream
 stream.stop_stream()
 stream.close()
 p.terminate()
